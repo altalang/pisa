@@ -1,0 +1,38 @@
+Converting test-font-img-error.html to /Users/dirk/work/xhtml2pdf-30/test/test-font-img-error.pdf...
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+Helvetica
+-> Helvetica
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+code2000
+-> code2000_00
+*** ERRORS OCCURED
