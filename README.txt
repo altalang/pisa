@@ -1,3 +1,13 @@
+ALTA FORK
+=========
+
+ATLA has forked pisa for the addition of the AltaParagraph layout class with improved handling of non latin/greek and non CJK languages. 
+
+Install via:
+
+pip install git+https://github.com/altalang/pisa#egg=pisa
+
+
 HELP
 ====
 
