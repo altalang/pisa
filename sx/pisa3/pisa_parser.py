@@ -243,7 +243,7 @@ def CSS2Frag(c, kw, isBlock):
         c.frag.backColor = getColor(c.cssAttr["background-color"])
     # FONT SIZE, STYLE, WEIGHT    
     if c.cssAttr.has_key("font-family"):
-        c.frag.fontName = c.getFontName(c.cssAttr["font-family"])    
+        c.frag.fontName = c.getFontName(c.cssAttr["font-family"])
     if c.cssAttr.has_key("font-size"):
         # XXX inherit
         c.frag.fontSize = max(getSize("".join(c.cssAttr["font-size"]), c.frag.fontSize, c.baseFontSize), 1.0)    
@@ -387,7 +387,7 @@ def pisaPreLoop(node, c, collect=False):
     
                 if name == "style":
                     for node in node.childNodes:
-                        data += pisaPreLoop(node, c, collect=True)                    
+                        data += pisaPreLoop(node, c, collect=True)
                     c.addCSS(data)                        
                     return u""
                     #collect = True
@@ -421,12 +421,13 @@ def pisaLoop(node, c, path=[], **kw):
         kw = copy.copy(kw)
         
     indent = len(path) * "  "
-
+    
     # TEXT
     if node.nodeType == Node.TEXT_NODE:
         # print indent, "#", repr(node.data) #, c.frag
         c.addFrag(node.data)
         # c.text.append(node.value)
+        #print node.data
        
     # ELEMENT
     elif node.nodeType == Node.ELEMENT_NODE:  
@@ -454,7 +455,7 @@ def pisaLoop(node, c, path=[], **kw):
         pageBreakAfter = False
         frameBreakAfter = False
         display = c.cssAttr.get("display", "inline").lower()
-        # print indent, node.tagName, display, c.cssAttr.get("background-color", None), attr
+        #print indent, node.tagName, display, c.cssAttr.get("background-color", None), attr
         isBlock = (display == "block")
         if isBlock:
             c.addPara()
@@ -597,7 +598,7 @@ def pisaParser(src, c, default_css="", xhtml=False, encoding=None, xml_output=No
         if type(src) is types.UnicodeType:
             encoding = "utf8"
             src = src.encode(encoding)
-        src = pisaTempFile(src, capacity=c.capacity)    
+        #src = pisaTempFile(src, capacity=c.capacity)    
 
     # Test for the restrictions of html5lib
     if encoding:
@@ -611,23 +612,33 @@ def pisaParser(src, c, default_css="", xhtml=False, encoding=None, xml_output=No
              if inputstream.codecName(encoding) is None:
                  log.error("%r is not a valid encoding", encoding)
     
+    
+    #encoding = 'utf-8'
     document = parser.parse(
         src,
         encoding=encoding)
         
-    if xml_output:        
+    if xml_output:
         xml_output.write(document.toprettyxml(encoding="utf8"))    
 
     if default_css:
         c.addCSS(default_css)
-        
-    pisaPreLoop(document, c)    
+    
+    #from html5lib import treewalkers, serializer
+    #walker = treewalkers.getTreeWalker("dom")
+    #stream = walker(document)
+    #s = serializer.htmlserializer.HTMLSerializer(omit_optional_tags=False)
+    #output_generator = s.serialize(stream)
+    #for item in output_generator:
+    #    print item
+    
+    #pisaPreLoop(document, c)
     #try:
     c.parseCSS()        
     #except:
     #    c.cssText = DEFAULT_CSS
     #    c.parseCSS()        
-    # c.debug(9, pprint.pformat(c.css))        
+    # c.debug(9, pprint.pformat(c.css))
     pisaLoop(document, c)
     return c
 

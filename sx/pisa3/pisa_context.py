@@ -38,6 +38,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.fonts import addMapping
 
+from alta_paragraph import AltaParagraph
+
 from sx.w3c import css, cssDOMElementInterface
 
 from html5lib.sanitizer import *
@@ -86,7 +88,10 @@ def getParaFrag(style):
     frag.fontName, frag.bold, frag.italic = ps2tt(style.fontName)    
     frag.fontSize = style.fontSize
     frag.textColor = style.textColor
-        
+    
+    # fontName, bold, italic, fontSize, textColor
+    # are all that is set on frag from a passed in style
+    
     # Extras
     frag.leading = 0
     frag.leadingSource = "150%"
@@ -448,7 +453,6 @@ class pisaContext:
         self.anchorName = []
         
         self.tableData = None
-        
         self.frag = self.fragBlock = getParaFrag(ParagraphStyle('default%d' % self.UID()))
         self.fragList = []
         self.fragAnchor = []
@@ -458,7 +462,7 @@ class pisaContext:
         self.listCounter = 0
         
         self.cssText = ""        
-        
+      
         self.image = None
         self.imageData = {}
         self.force = False
@@ -477,7 +481,9 @@ class pisaContext:
             subject="",
             keywords="",
             pagesize=A4,
-            )       
+        )
+        
+        self.use_bidi = False
 
     def UID(self):
         self.uidctr += 1
@@ -683,7 +689,7 @@ class pisaContext:
             maxLeading = max(leading, frag.fontSize + frag.leadingSpace, maxLeading)     
             frag.leading = leading
                
-        if force  or (self.text.strip() and self.fragList):
+        if force or (self.text.strip() and self.fragList):
                     
             # Strip trailing whitespaces
             #for f in self.fragList:
@@ -724,11 +730,14 @@ class pisaContext:
                     self.fragList.append(blank)                    
                 
                 self.dumpPara(self.fragAnchor + self.fragList, style)
-                para = PmlParagraph(
+                
+               # para = PmlParagraph(
+                para = AltaParagraph(
                     self.text,
                     style,
                     frags=self.fragAnchor + self.fragList,
-                    bulletText=bulletText)
+                    bulletText=bulletText,
+                    use_bidi=self.use_bidi)
                 
                 # Mirrored and BIDI
                 #import unicodedata
@@ -803,8 +812,7 @@ class pisaContext:
 
         # bold, italic, and underline
         frag.fontName = frag.bulletFontName = tt2ps(frag.fontName, frag.bold, frag.italic)
-        # print frag.bulletFontName
-
+        
         # Modify text for optimal whitespace handling
         # XXX Support Unicode whitespaces?
         # XXX What about images?
@@ -824,7 +832,6 @@ class pisaContext:
         # log.debug("> %r", text)
         
         if frag.whiteSpace == "pre":     
-            
             # Handle by lines       
             for text in re.split(r'(\r\n|\n|\r)', text):                
                 # This is an exceptionally expensive piece of code
@@ -846,20 +853,25 @@ class pisaContext:
                             text = NBSP 
                         frag.text = text
                         self._appendFrag(frag)                
-        else: 
+        else:            
             for text in re.split(u'(' + NBSP + u')', text):   
                 frag = baseFrag.clone()
-                if text == NBSP:    
+                if text == NBSP:
                     self.force = True                
                     frag.text = NBSP
                     self.text += text
                     self._appendFrag(frag)
-                else:                    
-                    frag.text = " ".join(("x" + text + "x").split())[1: - 1]       
+                else:
+                    frag.text = " ".join(("x" + text + "x").split())[1: - 1]  
                     if self.fragStrip:
                         frag.text = frag.text.lstrip()
                         if frag.text:
-                            self.fragStrip = False            
+                            self.fragStrip = False
+                            #import pyfribidi2 as pyfribidi
+                            #words = frag.text.split(' ')
+                            #frag.text = pyfribidi.log2vis(frag.text, clean=True)
+                            
+                            
                     self.text += frag.text
                     self._appendFrag(frag)
         # print frag.fontName, repr(frag.text), frag.bulletText      

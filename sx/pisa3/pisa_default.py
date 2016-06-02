@@ -367,6 +367,40 @@ TAGS = {
     }
 
 # XXX use "html" not "*" as default!
+
+
+BAD_DEFAULT_CSS = """
+html {
+    font-family: arial; 
+    font-size: 10px; 
+    font-weight: normal;
+    color: #000000; 
+    background-color: transparent;
+    margin: 0; 
+    padding: 0;
+    line-height: 150%;
+    border: 1px none;
+    display: inline;
+    width: auto;
+    height: auto;
+    white-space: normal;    
+}
+
+p {
+    margin:1em 0;
+}
+
+body,
+div,
+p {
+    display: block;
+}
+ 
+"""
+
+
+
+
 DEFAULT_CSS = """
 html {
     font-family: Helvetica; 

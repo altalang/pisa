@@ -389,6 +389,11 @@ def _getFragWords(frags):
     hangingStrip = False
     for f in frags:
         text = f.text
+        
+        # RTLCHANGE
+        import pyfribidi2
+        text = pyfribidi2.log2vis(text)
+        
         #del f.text # we can't do this until we sort out splitting
                     # of paragraphs
         if text!='':
@@ -446,6 +451,9 @@ def _getFragWords(frags):
         W.insert(0,n)
         R.append(W)
 
+    #for thing in R:
+    #    print thing[1][1]
+    
     return R
 
 def _split_blParaSimple(blPara,start,stop):
@@ -1053,6 +1061,68 @@ class Paragraph(Flowable):
         #so not doing it here makes it easier to switch.
         self.drawPara(self.debug)
 
+
+#    def _split_line(self, line):
+#        """
+#        Splits a line into words, returning a 2-element tuple with the list of 
+#        words and whether or not the words have trailing spaces. If PyICU is 
+#        available, line wrapping is done using that instead of Python's string 
+#        L{split} method. ICU's line breaking algorithm is based on Unicode 
+#        standards and more elegantly handles punctuation as well as languages 
+#        with no spaces (e.g., Mandarin and Thai).
+#
+#        Although ICU's break iterators require a locale when initialized, it's 
+#        only used for Thai as indicated in the ICU User Guide; see 
+#        http://userguide.icu-project.org/boundaryanalysis#TOC-Usage. When given 
+#        a Thai locale, the iterators still handle non-Thai text correctly.
+#
+#        To handle this elegantly, we first check if the line contains any 
+#        characters in the Thai Unicode block as defined in the UCD: 
+#        http://www.unicode.org/Public/UNIDATA/Blocks.txt. If no Thai characters 
+#        are found, the default locale is used. Otherwise, the base Thai locale 
+#        is used. Iterators are cached for performance reasons.
+#
+#        @param line: the line to split
+#        @type line: string or unicode
+#        @return: the list of words and whether or not they have trailing spaces
+#        @rtype: 2-element tuple
+#        """
+#
+#        # if PyICU is not available, use the basic split
+#        if not sys.modules.has_key('PyICU'):
+#            return (line.split(' '), False)
+#
+#        # check if the text contains any Thai-block characters
+#        has_thai = False
+#        for character in line:
+#            if 0x0e00 < ord(character) < 0x0e7f:
+#                has_thai = True
+#                break
+#
+#        # get the appropriate locale
+#        if has_thai:
+#            icu_locale = PyICU.Locale('th')
+#        else:
+#            icu_locale = PyICU.Locale.getDefault()
+#
+#        # get the iterator
+#        iterator = _cached_line_iterators.get(icu_locale.getBaseName())
+#        if not iterator:
+#            iterator = PyICU.BreakIterator.createLineInstance(icu_locale)
+#            _cached_line_iterators[icu_locale.getBaseName()] = iterator
+#
+#        # split the line using the iterator
+#        words = []
+#        last_position = 0
+#        iterator.setText(line)
+#        for position in iterator:
+#            words.append(line[last_position:position])
+#            last_position = position
+#
+#        # return the words
+#        return (words, True)
+
+
     def breakLines(self, width):
         """
         Returns a broken line structure. There are two cases
@@ -1108,7 +1178,10 @@ class Paragraph(Flowable):
             fontSize = f.fontSize
             fontName = f.fontName
             ascent, descent = getAscentDescent(fontName,fontSize)
+
+            # wordsplit is here
             words = hasattr(f,'text') and split(f.text, ' ') or f.words
+
             spaceWidth = stringWidth(' ', fontName, fontSize, self.encoding)
             cLine = []
             currentWidth = -spaceWidth   # hack to get around extra space for word 1
@@ -1136,20 +1209,34 @@ class Paragraph(Flowable):
             if cLine!=[]:
                 if currentWidth>self.width: self.width = currentWidth
                 lines.append((maxWidth - currentWidth, cLine))
-
+            
             return f.clone(kind=0, lines=lines,ascent=ascent,descent=descent,fontSize=fontSize)
         elif nFrags<=0:
             return ParaLines(kind=0, fontSize=style.fontSize, fontName=style.fontName,
                             textColor=style.textColor, ascent=style.fontSize,descent=-0.2*style.fontSize,
                             lines=[])
         else:
-            if hasattr(self,'blPara') and getattr(self,'_splitpara',0):
-                #NB this is an utter hack that awaits the proper information
-                #preserving splitting algorithm
-                return self.blPara
+            #if hasattr(self,'blPara') and getattr(self,'_splitpara',0):
+            #    #NB this is an utter hack that awaits the proper information
+            #    #preserving splitting algorithm
+            #    return self.blPara
             n = 0
+            
+            # words is not a list of texts
+            # it's a list of fragments, that is only ever size one or zero
             words = []
-            for w in _getFragWords(frags):
+            
+            wordfrags = []
+            for fragment in frags:
+                fragment_words = _getFragWords([fragment])
+                fragment_words.reverse()
+                wordfrags += fragment_words
+            
+            #wordfrags = _getFragWords(frags)            
+            #wordfrags.reverse()
+            
+            for w in wordfrags:
+                # f is the frag
                 f=w[-1][0]
                 fontName = f.fontName
                 fontSize = f.fontSize
@@ -1159,29 +1246,34 @@ class Paragraph(Flowable):
                     currentWidth = -spaceWidth   # hack to get around extra space for word 1
                     maxSize = fontSize
                     maxAscent, minDescent = getAscentDescent(fontName,fontSize)
-
+                
                 wordWidth = w[0]
                 f = w[1][0]
                 if wordWidth>0:
                     newWidth = currentWidth + spaceWidth + wordWidth
                 else:
                     newWidth = currentWidth
+                # newWidth is is essentially the proposed width of 
+                # previous width of line plus the next(current) word
 
                 #test to see if this frag is a line break. If it is we will only act on it
                 #if the current width is non-negative or the previous thing was a deliberate lineBreak
                 lineBreak = hasattr(f,'lineBreak')
                 endLine = (newWidth>maxWidth and n>0) or lineBreak
+                # we never hit linebreak
+                # so this is testing if newWidth is too large
                 if not endLine:
                     if lineBreak: continue      #throw it away
+                    # nText is the actual word
                     nText = w[1][1]
                     if nText: n += 1
                     fontSize = f.fontSize
                     if calcBounds:
-                        cbDefn = getattr(f,'cbDefn',None)
-                        if getattr(cbDefn,'width',0):
-                            descent,ascent = imgVRange(cbDefn.height,cbDefn.valign,fontSize)
-                        else:
-                            ascent, descent = getAscentDescent(f.fontName,fontSize)
+                        #cbDefn = getattr(f,'cbDefn',None)
+                        #if getattr(cbDefn,'width',0):
+                        #    descent,ascent = imgVRange(cbDefn.height,cbDefn.valign,fontSize)
+                        #else:
+                        ascent, descent = getAscentDescent(f.fontName,fontSize)
                     else:
                         ascent, descent = getAscentDescent(f.fontName,fontSize)
                     maxSize = max(maxSize,fontSize)
@@ -1190,47 +1282,49 @@ class Paragraph(Flowable):
                     if not words:
                         g = f.clone()
                         words = [g]
-                        g.text = nText
-                    elif not _sameFrag(g,f):
-                        if currentWidth>0 and ((nText!='' and nText[0]!=' ') or hasattr(f,'cbDefn')):
-                            if hasattr(g,'cbDefn'):
-                                i = len(words)-1
-                                while i>=0:
-                                    wi = words[i]
-                                    cbDefn = getattr(wi,'cbDefn',None)
-                                    if cbDefn:
-                                        if not getattr(cbDefn,'width',0):
-                                            i -= 1
-                                            continue
-                                    if not wi.text.endswith(' '):
-                                        wi.text += ' '
-                                    break
-                            else:
-                                if not g.text.endswith(' '):
-                                    g.text += ' '
-                        g = f.clone()
-                        words.append(g)
-                        g.text = nText
+                        # g.text = nText
+                        g.text = [nText]
+                    #elif not _sameFrag(g,f):
+                    #    if currentWidth>0 and ((nText!='' and nText[0]!=' ') or hasattr(f,'cbDefn')):
+                    #        #if hasattr(g,'cbDefn'):
+                    #        #    i = len(words)-1
+                    #        #    while i>=0:
+                    #        #        wi = words[i]
+                    #        #        cbDefn = getattr(wi,'cbDefn',None)
+                    #        #        if cbDefn:
+                    #        #            if not getattr(cbDefn,'width',0):
+                    #        #                i -= 1
+                    #        #                continue
+                    #        #        if not wi.text.endswith(' '):
+                    #        #            wi.text += ' '
+                    #        #        break
+                    #        #else:
+                    #        if not g.text.endswith(' '):
+                    #            g.text += ' '
+                    #    g = f.clone()
+                    #    words.append(g)
+                    #    g.text = nText
                     else:
                         if nText!='' and nText[0]!=' ':
-                            g.text += ' ' + nText
-
-                    for i in w[2:]:
-                        g = i[0].clone()
-                        g.text=i[1]
-                        words.append(g)
-                        fontSize = g.fontSize
-                        if calcBounds:
-                            cbDefn = getattr(g,'cbDefn',None)
-                            if getattr(cbDefn,'width',0):
-                                descent,ascent = imgVRange(cbDefn.height,cbDefn.valign,fontSize)
-                            else:
-                                ascent, descent = getAscentDescent(g.fontName,fontSize)
-                        else:
-                            ascent, descent = getAscentDescent(g.fontName,fontSize)
-                        maxSize = max(maxSize,fontSize)
-                        maxAscent = max(maxAscent,ascent)
-                        minDescent = min(minDescent,descent)
+                            #g.text += ' ' + nText
+                            g.text.append(nText)
+                            
+                    #for i in w[2:]:
+                    #    g = i[0].clone()
+                    #    g.text=i[1]
+                    #    words.append(g)
+                    #    fontSize = g.fontSize
+                    #    if calcBounds:
+                    #        #cbDefn = getattr(g,'cbDefn',None)
+                    #        #if getattr(cbDefn,'width',0):
+                    #        #    descent,ascent = imgVRange(cbDefn.height,cbDefn.valign,fontSize)
+                    #        #else:
+                    #        ascent, descent = getAscentDescent(g.fontName,fontSize)
+                    #    else:
+                    #        ascent, descent = getAscentDescent(g.fontName,fontSize)
+                    #    maxSize = max(maxSize,fontSize)
+                    #    maxAscent = max(maxAscent,ascent)
+                    #    minDescent = min(minDescent,descent)
 
                     currentWidth = newWidth
                 else:  #either it won't fit, or it's a lineBreak tag
@@ -1238,14 +1332,30 @@ class Paragraph(Flowable):
                         g = f.clone()
                         #del g.lineBreak
                         words.append(g)
+                        #g.text = ['banana']
+                        g.text = []
 
                     if currentWidth>self.width: self.width = currentWidth
                     #end of line
+                    
+                    #banana = g.text
+                    #banana = banana.split()
+                    #banana.reverse()
+                    #banana = ' '.join(banana)
+                    #g.text = banana  
+                    words.reverse()                 
+                    for item in words:
+                        item.text.reverse()
+                        item.text = ' '.join(item.text)
+                        
                     lines.append(FragLine(extraSpace=maxWidth-currentWidth, wordCount=n,
-                                        lineBreak=lineBreak, words=words, fontSize=maxSize, ascent=maxAscent, descent=minDescent))
-
+                                          lineBreak=lineBreak, words=words, fontSize=maxSize,
+                                          ascent=maxAscent, descent=minDescent))
+                    
                     #start new line
                     lineno += 1
+                    
+                    # attempt to reset the maxWidth of the new line
                     try:
                         maxWidth = maxWidths[lineno]
                     except IndexError:
@@ -1254,45 +1364,63 @@ class Paragraph(Flowable):
                     if lineBreak:
                         n = 0
                         words = []
+                        #g.text = ['apple']
                         continue
-
+                    
+                    # because there was no linebreak
+                    # reuse the current word as the first word of the next line
                     currentWidth = wordWidth
                     n = 1
                     g = f.clone()
                     maxSize = g.fontSize
                     if calcBounds:
-                        cbDefn = getattr(g,'cbDefn',None)
-                        if getattr(cbDefn,'width',0):
-                            minDescent,maxAscent = imgVRange(cbDefn.height,cbDefn.valign,maxSize)
-                        else:
-                            maxAscent, minDescent = getAscentDescent(g.fontName,maxSize)
+                        #cbDefn = getattr(g,'cbDefn',None)
+                        #if getattr(cbDefn,'width',0):
+                        #    minDescent,maxAscent = imgVRange(cbDefn.height,cbDefn.valign,maxSize)
+                        #else:
+                        maxAscent, minDescent = getAscentDescent(g.fontName,maxSize)
                     else:
                         maxAscent, minDescent = getAscentDescent(g.fontName,maxSize)
                     words = [g]
-                    g.text = w[1][1]
+                    #g.text = w[1][1]
+                    g.text = [w[1][1]]
+                    
+                    #for i in w[2:]:
+                    #    g = i[0].clone()
+                    #    g.text=i[1]
+                    #    words.append(g)
+                    #    fontSize = g.fontSize
+                    #    if calcBounds:
+                    #        #cbDefn = getattr(g,'cbDefn',None)
+                    #        #if getattr(cbDefn,'width',0):
+                    #        #    descent,ascent = imgVRange(cbDefn.height,cbDefn.valign,fontSize)
+                    #        #else:
+                    #        ascent, descent = getAscentDescent(g.fontName,fontSize)
+                    #    else:
+                    #        ascent, descent = getAscentDescent(g.fontName,fontSize)
+                    #    maxSize = max(maxSize,fontSize)
+                    #    maxAscent = max(maxAscent,ascent)
+                    #    minDescent = min(minDescent,descent)
 
-                    for i in w[2:]:
-                        g = i[0].clone()
-                        g.text=i[1]
-                        words.append(g)
-                        fontSize = g.fontSize
-                        if calcBounds:
-                            cbDefn = getattr(g,'cbDefn',None)
-                            if getattr(cbDefn,'width',0):
-                                descent,ascent = imgVRange(cbDefn.height,cbDefn.valign,fontSize)
-                            else:
-                                ascent, descent = getAscentDescent(g.fontName,fontSize)
-                        else:
-                            ascent, descent = getAscentDescent(g.fontName,fontSize)
-                        maxSize = max(maxSize,fontSize)
-                        maxAscent = max(maxAscent,ascent)
-                        minDescent = min(minDescent,descent)
-
+            # end for loop
+            
             #deal with any leftovers on the final line
-            if words!=[]:
+            if words != []:
                 if currentWidth>self.width: self.width = currentWidth
+                
+                #banana = g.text
+                #banana = banana.split()
+                #banana.reverse()
+                #banana = ' '.join(banana)
+                #g.text = banana
+                words.reverse()
+                for item in words:
+                    item.text.reverse()
+                    item.text = ' '.join(item.text)
+                
                 lines.append(ParaLines(extraSpace=(maxWidth - currentWidth),wordCount=n,
                                     words=words, fontSize=maxSize,ascent=maxAscent,descent=minDescent))
+                
             return ParaLines(kind=1, lines=lines)
 
         return lines
